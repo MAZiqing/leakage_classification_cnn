@@ -9,7 +9,7 @@ from models.tcn import TemporalConvNet
 
 
 class LeakageTCN(nn.Module):
-    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout):
+    def __init__(self, input_size, output_size=2, num_channels=[1], kernel_size=32, dropout=0.5):
         super(LeakageTCN, self).__init__()
         self.tcn = TemporalConvNet(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
         self.linear = nn.Linear(num_channels[-1], output_size)

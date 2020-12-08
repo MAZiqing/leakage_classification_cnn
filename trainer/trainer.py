@@ -3,37 +3,43 @@
 # @Author  : MA Ziqing
 # @FileName: trainer.py
 
+import torch
+from torch.utils.data import DataLoader
 from models.leakage_tcn import LeakageTCN
+from dataset.leak_dataset import LeakDataset
+import datetime
 
 
 class Trainer(object):
-    def __init__(self):
-        self.batch_size = 32
-        self.epoch = 100
-        self.model = LeakageTCN()
-        self.optimizer = None
+    def __init__(self, args):
+        self.args = args
+        self.model = LeakageTCN(input_size=args.input_channel,
+                                output_size=args.output_size,
+                                num_channels=[args.nhid] * args.levels,
+                                kernel_size=args.ksize,
+                                dropout=args.dropout)
+        self.optimizer = torch.optim.Adam(self.model.parameters(),
+                                          lr=args.lr)
+        self.dataset = LeakDataset(signal_length_maximum=args.signal_length_maximum)
+        self.data_loader = DataLoader(self.dataset,
+                                      batch_size=args.batch_size,
+                                      shuffle=True)
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
+
+    def train_all(self):
+        for epoch in range(0, self.args.epochs):
+            loss = self.train()
+            print('time={} | epoch={} | loss={} |'.format(datetime.datetime.now(), epoch, loss))
 
     def train(self):
         self.model.train()
         total_loss = 0.0
-        total_loss_l1 = 0.0
         i = 1
-        for i, (input_p, label_p, datetime_i) in enumerate(self.data_loader):
+        for i, (inputs, labels) in enumerate(self.data_loader):
             self.optimizer.zero_grad()
-            if input_p.shape[0] == args.batch_size:
-                outputs_p = self.model(input_p, label_p)  # torch.Size([64, 10, 9])
-                label_p = label_p[:, -args.decoder_sequence_length:]
-                # outputs_p = outputs_p.squeeze()
-                if i == 100:
-                    if self.epoch % 10 == 0:
-                        print('label:', np.around(label_p[0].cpu().detach().numpy(), decimals=5))
-                        print('output:', np.around(outputs_p[0].cpu().detach().numpy(), decimals=5))
-                loss = self.mse_loss(outputs_p, label_p)
-                l1loss = self.l1_loss(outputs_p, label_p)
-                loss.backward()
-                self.optimizer.step()
-                total_loss += loss.cpu().detach().numpy()
-                total_loss_l1 += l1loss.cpu().detach().numpy()
-        self.train_mse_loss.append(total_loss / i)
-        self.result_df['train_mse_curve'] = [self.train_mse_loss]
-        return total_loss / i, total_loss_l1 / i
+            outputs = self.model(inputs)  # torch.Size([64, 10, 9])
+            loss = self.cross_entropy_loss(outputs, labels)
+            loss.backward()
+            self.optimizer.step()
+            total_loss += loss.cpu().detach().numpy()
+        return total_loss / i
